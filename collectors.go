@@ -76,13 +76,10 @@ func (c *LogpullCollector) Collect(ch chan<- prometheus.Metric) {
 
 	for _, zoneID := range c.zoneIDs {
 		wg.Add(1)
+
 		go func(zoneID string) {
 			httpResponses := make(HTTPResponseAggregator)
-
-			err := GetLogEntries(c.api, zoneID, start, end, func(entry LogEntry) {
-				httpResponses.Inc(entry)
-			})
-
+			err := GetLogEntries(c.api, zoneID, start, end, httpResponses.Inc)
 			httpResponses.Collect(ch)
 
 			if err != nil {
@@ -99,6 +96,7 @@ func (c *LogpullCollector) Collect(ch chan<- prometheus.Metric) {
 			}
 
 			wg.Done()
+
 		}(zoneID)
 	}
 
