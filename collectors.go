@@ -78,9 +78,9 @@ func (c *LogpullCollector) Collect(ch chan<- prometheus.Metric) {
 		wg.Add(1)
 
 		go func(zoneID string) {
-			httpResponses := make(HTTPResponseAggregator)
-			err := GetLogEntries(c.api, zoneID, start, end, httpResponses.Inc)
-			httpResponses.Collect(ch)
+			logEntries := make(LogEntryAggregator)
+			err := GetLogEntries(c.api, zoneID, start, end, logEntries.Inc)
+			logEntries.Collect(ch)
 
 			if err != nil {
 				if rerr, ok := err.(RetryableAPIError); ok {
@@ -103,30 +103,30 @@ func (c *LogpullCollector) Collect(ch chan<- prometheus.Metric) {
 	wg.Wait()
 }
 
-// HTTPResponseAggregator is used to count the number of times a given LogEntry
-// has been seen. It implements the prometheus.Collector interface, but in
-// order to be used as such it must be 'driven' externally by calling 'Inc'.
-type HTTPResponseAggregator map[LogEntry]float64
+// LogEntryAggregator is used to count the number of times a given LogEntry has
+// been seen. It implements the prometheus.Collector interface, but in order to
+// be used as such it must be 'driven' externally by calling 'Inc'.
+type LogEntryAggregator map[LogEntry]float64
 
 // Inc increments the number of times that a given LogEntry has been observed.
-func (m HTTPResponseAggregator) Inc(entry LogEntry) {
+func (m LogEntryAggregator) Inc(entry LogEntry) {
 	prev, _ := m[entry]
 	m[entry] = prev + 1
 }
 
 // Describe is a required method of the prometheus.Collector interface. It is
 // used to validate that there are no metric collisions when the collector is
-// registered. Although HTTPResponseAggregator can be registered as a
-// collector, it may not be registered at the same time as a LogpullCollector
-// since both ship the same metrics.
-func (m HTTPResponseAggregator) Describe(ch chan<- *prometheus.Desc) {
+// registered. Although LogEntryAggregator can be registered as a collector, it
+// may not be registered at the same time as a LogpullCollector since both ship
+// the same metrics.
+func (m LogEntryAggregator) Describe(ch chan<- *prometheus.Desc) {
 	ch <- httpResponseDesc
 }
 
 // Collect is a required method of the prometheus.Collector interface. When
 // registered, it is called by the Prometheus registry whenever a new set of
 // metrics are to be collected.
-func (m HTTPResponseAggregator) Collect(ch chan<- prometheus.Metric) {
+func (m LogEntryAggregator) Collect(ch chan<- prometheus.Metric) {
 	for entry, value := range m {
 		ch <- prometheus.MustNewConstMetric(
 			httpResponseDesc,
