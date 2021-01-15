@@ -3,6 +3,7 @@ package main
 import (
 	"log"
 	"strconv"
+	"sync"
 	"time"
 
 	"github.com/cloudflare/cloudflare-go"
@@ -44,17 +45,14 @@ func init() {
 // LogpullCollector is an implementation of prometheus.Collector which reads
 // from Cloudflare's Logpull API and produces aggregated metrics.
 type LogpullCollector struct {
-	api    *cloudflare.API
-	zoneID string
+	api     *cloudflare.API
+	zoneIDs []string
 }
 
 // NewLogpullCollector creates a new LogpullCollector based on the provided
-// *cloudflare.API and zoneID string.
-func NewLogpullCollector(api *cloudflare.API, zoneID string) *LogpullCollector {
-	return &LogpullCollector{
-		api:    api,
-		zoneID: zoneID,
-	}
+// *cloudflare.API and zoneIDs.
+func NewLogpullCollector(api *cloudflare.API, zoneIDs []string) *LogpullCollector {
+	return &LogpullCollector{api, zoneIDs}
 }
 
 // Describe is a required method of the prometheus.Collector interface. It is
@@ -70,31 +68,41 @@ func (c *LogpullCollector) Describe(ch chan<- *prometheus.Desc) {
 // are logged and counted in the 'cloudflare_logs_api_errors_total' metric. If
 // a non-retryable error occurs here, we log it and exit non-zero.
 func (c *LogpullCollector) Collect(ch chan<- prometheus.Metric) {
-	httpResponses := make(HTTPResponseAggregator)
-
 	// The Logpull API docs say that we must go back at least one full minute.
 	end := time.Now().Add(-1 * time.Minute)
 	start := end.Add(-1 * LogPeriod)
 
-	err := GetLogEntries(c.api, c.zoneID, start, end, func(entry LogEntry) {
-		httpResponses.Inc(entry)
-	})
+	var wg sync.WaitGroup
 
-	if err != nil {
-		if rerr, ok := err.(RetryableAPIError); ok {
-			labels := prometheus.Labels{
-				"operation": rerr.Operation,
-				"kind":      rerr.Kind,
+	for _, zoneID := range c.zoneIDs {
+		wg.Add(1)
+		go func(zoneID string) {
+			httpResponses := make(HTTPResponseAggregator)
+
+			err := GetLogEntries(c.api, zoneID, start, end, func(entry LogEntry) {
+				httpResponses.Inc(entry)
+			})
+
+			httpResponses.Collect(ch)
+
+			if err != nil {
+				if rerr, ok := err.(RetryableAPIError); ok {
+					labels := prometheus.Labels{
+						"operation": rerr.Operation,
+						"kind":      rerr.Kind,
+					}
+					retryableAPIErrors.With(labels).Inc()
+					log.Println(err)
+				} else {
+					log.Fatal(err)
+				}
 			}
 
-			retryableAPIErrors.With(labels).Inc()
-			log.Println(err)
-		} else {
-			log.Fatal(err)
-		}
+			wg.Done()
+		}(zoneID)
 	}
 
-	httpResponses.Collect(ch)
+	wg.Wait()
 }
 
 // HTTPResponseAggregator is used to count the number of times a given LogEntry

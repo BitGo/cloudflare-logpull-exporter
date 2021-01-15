@@ -52,6 +52,8 @@ func main() {
 	}
 
 	zones := make(map[string]string)
+	zoneIDs := make([]string, 0)
+
 	for _, name := range strings.Split(zoneNames, ",") {
 		name = strings.TrimSpace(name)
 		id, err := api.ZoneIDByName(name)
@@ -59,6 +61,7 @@ func main() {
 			log.Fatalf("Error looking up zone ID for zone %s: %s", name, err.Error())
 		}
 		zones[name] = id
+		zoneIDs = append(zoneIDs, id)
 	}
 
 	for name, id := range zones {
@@ -73,9 +76,9 @@ func main() {
 				log.Fatalf("Error enabling log retention for zone %s: %s", name, err.Error())
 			}
 		}
-
-		prometheus.MustRegister(NewLogpullCollector(api, id))
 	}
+
+	prometheus.MustRegister(NewLogpullCollector(api, zoneIDs))
 
 	http.Handle("/metrics", promhttp.Handler())
 	log.Printf("Listening on %s", addr)
