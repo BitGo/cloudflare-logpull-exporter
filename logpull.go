@@ -12,14 +12,21 @@ import (
 	"github.com/cloudflare/cloudflare-go"
 )
 
+// LogEntry contains all of the fields we care about from Cloudflare Logpull
+// API response data. It is the target type of JSON unmarshaling and is safe to
+// use as a map key.
 type LogEntry struct {
 	ClientRequestHost    string `json:"ClientRequestHost"`
 	EdgeResponseStatus   int    `json:"EdgeResponseStatus"`
 	OriginResponseStatus int    `json:"OriginResponseStatus"`
 }
 
-// Get log entries from Cloudflare's Logpull API
-func getLogEntries(api *cloudflare.API, zoneID string, start, end time.Time, fn func(LogEntry)) error {
+// GetLogEntries makes a request to Cloudflare's Logpull API, requesting
+// LogEntries for the given zoneID between the given start and end time. Each
+// entry is parsed into a LogEntry and passed to the given function. If any
+// error occurs, it is returned to the caller. If the error is presumably safe
+// to retry (i.e., non-fatal), it will have the type RetryableAPIError.
+func GetLogEntries(api *cloudflare.API, zoneID string, start, end time.Time, fn func(LogEntry)) error {
 	fields := []string{
 		"ClientRequestHost",
 		"EdgeResponseStatus",
@@ -78,9 +85,8 @@ func getLogEntries(api *cloudflare.API, zoneID string, start, end time.Time, fn 
 				Operation: operation,
 				Kind:      ErrKindJSONParse,
 			}
-		} else {
-			fn(entry)
 		}
+		fn(entry)
 	}
 
 	return nil

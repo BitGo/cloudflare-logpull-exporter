@@ -9,10 +9,13 @@ import (
 	"github.com/prometheus/client_golang/prometheus"
 )
 
-const LOG_PERIOD = 1 * time.Minute
+// LogPeriod is the window of time for which we want to receive logs, relative
+// to one minute ago. At one minute, this expresses that we want the logs
+// beginning two minutes ago and ending one minute ago.
+const LogPeriod = 1 * time.Minute
 
 var (
-	HTTPResponseDesc = prometheus.NewDesc(
+	httpResponseDesc = prometheus.NewDesc(
 		"cloudflare_logs_http_responses",
 		"Cloudflare HTTP responses, obtained via Logpull API",
 		[]string{
@@ -21,11 +24,11 @@ var (
 			"origin_response_status",
 		},
 		prometheus.Labels{
-			"period": promDurationString(LOG_PERIOD),
+			"period": promDurationString(LogPeriod),
 		},
 	)
 
-	RetryableAPIErrors = prometheus.NewCounterVec(
+	retryableAPIErrors = prometheus.NewCounterVec(
 		prometheus.CounterOpts{
 			Name: "cloudflare_logs_api_errors_total",
 			Help: "The total number of retryable Cloudflare API errors",
@@ -35,14 +38,18 @@ var (
 )
 
 func init() {
-	prometheus.MustRegister(RetryableAPIErrors)
+	prometheus.MustRegister(retryableAPIErrors)
 }
 
+// LogpullCollector is an implementation of prometheus.Collector which reads
+// from Cloudflare's Logpull API and produces aggregated metrics.
 type LogpullCollector struct {
 	api    *cloudflare.API
 	zoneID string
 }
 
+// NewLogpullCollector creates a new LogpullCollector based on the provided
+// *cloudflare.API and zoneID string.
 func NewLogpullCollector(api *cloudflare.API, zoneID string) *LogpullCollector {
 	return &LogpullCollector{
 		api:    api,
@@ -50,18 +57,26 @@ func NewLogpullCollector(api *cloudflare.API, zoneID string) *LogpullCollector {
 	}
 }
 
+// Describe is a required method of the prometheus.Collector interface. It is
+// used to validate that there are no metric collisions when the collector is
+// registered.
 func (c *LogpullCollector) Describe(ch chan<- *prometheus.Desc) {
-	ch <- HTTPResponseDesc
+	ch <- httpResponseDesc
 }
 
+// Collect is a required method of the prometheus.Collector interface. It is
+// called by the Prometheus registry whenever a new set of metrics are to be
+// collected. If any retryable errors are encountered during this process, they
+// are logged and counted in the 'cloudflare_logs_api_errors_total' metric. If
+// a non-retryable error occurs here, we log it and exit non-zero.
 func (c *LogpullCollector) Collect(ch chan<- prometheus.Metric) {
 	httpResponses := make(HTTPResponseAggregator)
 
 	// The Logpull API docs say that we must go back at least one full minute.
 	end := time.Now().Add(-1 * time.Minute)
-	start := end.Add(-1 * LOG_PERIOD)
+	start := end.Add(-1 * LogPeriod)
 
-	err := getLogEntries(c.api, c.zoneID, start, end, func(entry LogEntry) {
+	err := GetLogEntries(c.api, c.zoneID, start, end, func(entry LogEntry) {
 		httpResponses.Inc(entry)
 	})
 
@@ -72,7 +87,7 @@ func (c *LogpullCollector) Collect(ch chan<- prometheus.Metric) {
 				"kind":      rerr.Kind,
 			}
 
-			RetryableAPIErrors.With(labels).Inc()
+			retryableAPIErrors.With(labels).Inc()
 			log.Println(err)
 		} else {
 			log.Fatal(err)
@@ -82,21 +97,33 @@ func (c *LogpullCollector) Collect(ch chan<- prometheus.Metric) {
 	httpResponses.Collect(ch)
 }
 
+// HTTPResponseAggregator is used to count the number of times a given LogEntry
+// has been seen. It implements the prometheus.Collector interface, but in
+// order to be used as such it must be 'driven' externally by calling 'Inc'.
 type HTTPResponseAggregator map[LogEntry]float64
 
+// Inc increments the number of times that a given LogEntry has been observed.
 func (m HTTPResponseAggregator) Inc(entry LogEntry) {
 	prev, _ := m[entry]
 	m[entry] = prev + 1
 }
 
+// Describe is a required method of the prometheus.Collector interface. It is
+// used to validate that there are no metric collisions when the collector is
+// registered. Although HTTPResponseAggregator can be registered as a
+// collector, it may not be registered at the same time as a LogpullCollector
+// since both ship the same metrics.
 func (m HTTPResponseAggregator) Describe(ch chan<- *prometheus.Desc) {
-	ch <- HTTPResponseDesc
+	ch <- httpResponseDesc
 }
 
+// Collect is a required method of the prometheus.Collector interface. When
+// registered, it is called by the Prometheus registry whenever a new set of
+// metrics are to be collected.
 func (m HTTPResponseAggregator) Collect(ch chan<- prometheus.Metric) {
 	for entry, value := range m {
 		ch <- prometheus.MustNewConstMetric(
-			HTTPResponseDesc,
+			httpResponseDesc,
 			prometheus.GaugeValue,
 			value,
 			entry.ClientRequestHost,
@@ -106,7 +133,8 @@ func (m HTTPResponseAggregator) Collect(ch chan<- prometheus.Metric) {
 	}
 }
 
-// Turn a `time.Duration` into a Prometheus' format duration string
+// promDurationString turns a `time.Duration` into a string in Prometheus'
+// standard format.
 func promDurationString(d time.Duration) string {
 	s := ""
 	if int(d.Hours()) > 0 {
