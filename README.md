@@ -1,6 +1,6 @@
 # cloudflare-logpull-exporter
 
-A Prometheus exporter to aggregate logs from Cloudflare's Logpull* API.
+A Prometheus exporter to aggregate logs from Cloudflare's [Logpull* API][logpull-api].
 
 *NOTE: This API is only available to Enterprise customers*
 
@@ -30,3 +30,5 @@ $ docker run -d -p 9299:9299 \
     -e CLOUDFLARE_ZONE_NAMES=example.org \
     cloudflare-logpull-exporter
 ```
+
+[logpull-api]: https://developers.cloudflare.com/logs/logpull-api
