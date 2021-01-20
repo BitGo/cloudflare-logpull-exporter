@@ -12,6 +12,8 @@ import (
 )
 
 func main() {
+	minimalPermissions := os.Getenv("EXPORTER_MINIMAL_PERMISSIONS") != ""
+
 	addr := os.Getenv("EXPORTER_LISTEN_ADDR")
 	if addr == "" {
 		addr = ":9299"
@@ -64,16 +66,20 @@ func main() {
 		zoneIDs = append(zoneIDs, id)
 	}
 
-	for name, id := range zones {
-		flag, err := api.GetLogpullRetentionFlag(id)
-		if err != nil {
-			log.Fatalf("Error checking log retention settings for zone %s: %s", name, err.Error())
-		}
+	if !minimalPermissions {
+		for name, id := range zones {
+			// We cannot even check if log retention is enabled
+			// without having Zone -> Logs -> Edit permissions.
+			flag, err := api.GetLogpullRetentionFlag(id)
+			if err != nil {
+				log.Fatalf("Error checking log retention settings for zone %s: %s", name, err.Error())
+			}
 
-		if !flag.Flag {
-			log.Printf("Enabling log retention for zone: %s", name)
-			if _, err := api.SetLogpullRetentionFlag(id, true); err != nil {
-				log.Fatalf("Error enabling log retention for zone %s: %s", name, err.Error())
+			if !flag.Flag {
+				log.Printf("Enabling log retention for zone: %s", name)
+				if _, err := api.SetLogpullRetentionFlag(id, true); err != nil {
+					log.Fatalf("Error enabling log retention for zone %s: %s", name, err.Error())
+				}
 			}
 		}
 	}
