@@ -12,6 +12,8 @@ $ docker build -t cloudflare-logpull-exporter .
 
 ## Running
 
+In order for the exporter to work, [log retention][docs-enabling-log-retention] must be enabled for all of the zones to be targetted. One way to do this, if using Terraform, would be to define a [`cloudflare_logpull_retention`][terraform-cloudflare-logpull-retention] resource.
+
 All configuration is done through the following environment variables:
 
 | Name                    | Required                                            |
@@ -32,3 +34,5 @@ $ docker run -d -p 9299:9299 \
 ```
 
 [logpull-api]: https://developers.cloudflare.com/logs/logpull-api
+[docs-enabling-log-retention]: https://developers.cloudflare.com/logs/logpull-api/enabling-log-retention
+[terraform-cloudflare-logpull-retention]: https://registry.terraform.io/providers/cloudflare/cloudflare/latest/docs/resources/logpull_retention

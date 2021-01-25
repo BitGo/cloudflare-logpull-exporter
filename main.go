@@ -64,20 +64,6 @@ func main() {
 		zoneIDs = append(zoneIDs, id)
 	}
 
-	for name, id := range zones {
-		flag, err := api.GetLogpullRetentionFlag(id)
-		if err != nil {
-			log.Fatalf("Error checking log retention settings for zone %s: %s", name, err.Error())
-		}
-
-		if !flag.Flag {
-			log.Printf("Enabling log retention for zone: %s", name)
-			if _, err := api.SetLogpullRetentionFlag(id, true); err != nil {
-				log.Fatalf("Error enabling log retention for zone %s: %s", name, err.Error())
-			}
-		}
-	}
-
 	prometheus.MustRegister(NewLogpullCollector(api, zoneIDs))
 
 	http.Handle("/metrics", promhttp.Handler())
