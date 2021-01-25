@@ -54,7 +54,6 @@ func GetLogEntries(api *cloudflare.API, zoneID string, start, end time.Time, fn 
 
 	client := new(http.Client)
 	resp, err := client.Do(req)
-	defer resp.Body.Close()
 
 	operation := "getLogEntries"
 
@@ -66,9 +65,11 @@ func GetLogEntries(api *cloudflare.API, zoneID string, start, end time.Time, fn 
 		}
 	}
 
+	defer resp.Body.Close()
+
 	if resp.StatusCode != http.StatusOK {
 		return RetryableAPIError{
-			error:     err,
+			error:     fmt.Errorf("Received unexpected HTTP status code: %d", resp.StatusCode),
 			Operation: operation,
 			Kind:      ErrKindHTTPStatus,
 		}
