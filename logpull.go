@@ -68,8 +68,14 @@ func GetLogEntries(api *cloudflare.API, zoneID string, start, end time.Time, fn 
 	defer resp.Body.Close()
 
 	if resp.StatusCode != http.StatusOK {
+		err = fmt.Errorf("Received unexpected HTTP status code: %d", resp.StatusCode)
+
+		if resp.StatusCode == http.StatusBadRequest {
+			err = fmt.Errorf("Logpull retention must be enabled: %w", err)
+		}
+
 		return RetryableAPIError{
-			error:     fmt.Errorf("Received unexpected HTTP status code: %d", resp.StatusCode),
+			error:     err,
 			Operation: operation,
 			Kind:      ErrKindHTTPStatus,
 		}
