@@ -71,7 +71,7 @@ func (c *collector) Collect(ch chan<- prometheus.Metric) {
 		go func(zoneID string) {
 			responses := make(map[logEntry]float64)
 
-			if err := getLogEntries(c.api, zoneID, start, end, func(entry logEntry) error {
+			if err := pullLogEntries(c.api, zoneID, start, end, func(entry logEntry) error {
 				responses[entry]++
 				return nil
 			}); err != nil {

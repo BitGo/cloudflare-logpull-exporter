@@ -22,11 +22,14 @@ type logEntry struct {
 	OriginResponseStatus int    `json:"OriginResponseStatus"`
 }
 
-// getLogEntries makes a request to Cloudflare's Logpull API, requesting log
+// pullLogEntries makes a request to Cloudflare's Logpull API, requesting log
 // entries for the given zoneID between the given start and end time. Each
 // entry is parsed into a logEntry struct and passed to the given handler
 // function.
-func getLogEntries(api *cloudflare.API, zoneID string, start, end time.Time, handler func(logEntry) error) error {
+func pullLogEntries(api *cloudflare.API, zoneID string, start, end time.Time, handler func(logEntry) error) error {
+	// The API will only return the requested fields; thus, if we add or
+	// remove fields from the logEntry struct definition, we'll also want
+	// to make sure we update this list to ask the API for the same.
 	fields := []string{
 		"ClientRequestHost",
 		"EdgeResponseStatus",
