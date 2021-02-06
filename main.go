@@ -64,7 +64,7 @@ func main() {
 		zoneIDs = append(zoneIDs, id)
 	}
 
-	prometheus.MustRegister(NewLogpullCollector(api, zoneIDs))
+	prometheus.MustRegister(newLogpullCollector(api, zoneIDs))
 
 	http.Handle("/metrics", promhttp.Handler())
 	log.Printf("Listening on %s", addr)

@@ -12,21 +12,22 @@ import (
 	"github.com/cloudflare/cloudflare-go"
 )
 
-// LogEntry contains all of the fields we care about from Cloudflare Logpull
+// logEntry contains all of the fields we care about from Cloudflare Logpull
 // API response data. It is the target type of JSON unmarshaling and is safe to
 // use as a map key.
-type LogEntry struct {
+type logEntry struct {
 	ClientRequestHost    string `json:"ClientRequestHost"`
 	EdgeResponseStatus   int    `json:"EdgeResponseStatus"`
 	OriginResponseStatus int    `json:"OriginResponseStatus"`
 }
 
-// GetLogEntries makes a request to Cloudflare's Logpull API, requesting
-// LogEntries for the given zoneID between the given start and end time. Each
-// entry is parsed into a LogEntry and passed to the given function. If any
-// error occurs, it is returned to the caller. If the error is presumably safe
-// to retry (i.e., non-fatal), it will have the type RetryableAPIError.
-func GetLogEntries(api *cloudflare.API, zoneID string, start, end time.Time, fn func(LogEntry)) error {
+// getLogEntries makes a request to Cloudflare's Logpull API, requesting log
+// entries for the given zoneID between the given start and end time. Each
+// entry is parsed into a logEntry struct and passed to the given handler
+// function. If any error occurs, it is returned to the caller. If the error
+// is presumably safe to retry (i.e., non-fatal), it will have the type
+// RetryableAPIError.
+func getLogEntries(api *cloudflare.API, zoneID string, start, end time.Time, fn func(logEntry)) error {
 	fields := []string{
 		"ClientRequestHost",
 		"EdgeResponseStatus",
@@ -58,10 +59,10 @@ func GetLogEntries(api *cloudflare.API, zoneID string, start, end time.Time, fn 
 	operation := "getLogEntries"
 
 	if err != nil {
-		return RetryableAPIError{
+		return retryableAPIError{
 			error:     err,
-			Operation: operation,
-			Kind:      ErrKindHTTPProto,
+			operation: operation,
+			kind:      errKindHTTPProto,
 		}
 	}
 
@@ -74,10 +75,10 @@ func GetLogEntries(api *cloudflare.API, zoneID string, start, end time.Time, fn 
 			err = fmt.Errorf("Logpull retention must be enabled: %w", err)
 		}
 
-		return RetryableAPIError{
+		return retryableAPIError{
 			error:     err,
-			Operation: operation,
-			Kind:      ErrKindHTTPStatus,
+			operation: operation,
+			kind:      errKindHTTPStatus,
 		}
 	}
 
@@ -85,12 +86,12 @@ func GetLogEntries(api *cloudflare.API, zoneID string, start, end time.Time, fn 
 	scanner.Split(bufio.ScanLines)
 
 	for scanner.Scan() {
-		var entry LogEntry
+		var entry logEntry
 		if err := json.Unmarshal(scanner.Bytes(), &entry); err != nil {
-			return RetryableAPIError{
+			return retryableAPIError{
 				error:     err,
-				Operation: operation,
-				Kind:      ErrKindJSONParse,
+				operation: operation,
+				kind:      errKindJSONParse,
 			}
 		}
 		fn(entry)
