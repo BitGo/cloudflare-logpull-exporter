@@ -52,16 +52,12 @@ func main() {
 		log.Fatalf("creating api client: %s", err)
 	}
 
-	zones := make(map[string]string)
 	zoneIDs := make([]string, 0)
-
-	for _, name := range strings.Split(zoneNames, ",") {
-		name = strings.TrimSpace(name)
-		id, err := api.ZoneIDByName(name)
+	for _, zoneName := range strings.Split(zoneNames, ",") {
+		id, err := api.ZoneIDByName(strings.TrimSpace(zoneName))
 		if err != nil {
 			log.Fatalf("zone id lookup: %s", err)
 		}
-		zones[name] = id
 		zoneIDs = append(zoneIDs, id)
 	}
 
