@@ -6,7 +6,6 @@ import (
 	"sync"
 	"time"
 
-	"github.com/cloudflare/cloudflare-go"
 	"github.com/prometheus/client_golang/prometheus"
 	prommodel "github.com/prometheus/common/model"
 )
@@ -19,7 +18,7 @@ import (
 const logPeriodRange = 7*24*time.Hour - time.Minute
 
 type collector struct {
-	api          *cloudflare.API
+	api          *logpullAPI
 	zoneIDs      []string
 	logPeriod    time.Duration
 	responseDesc *prometheus.Desc
@@ -29,7 +28,7 @@ type collector struct {
 
 // newCollector creates a new Logpull collector. Returns an error if any
 // parameters are invalid.
-func newCollector(api *cloudflare.API, zoneIDs []string, logPeriod time.Duration, errorHandler func(error)) (*collector, error) {
+func newCollector(api *logpullAPI, zoneIDs []string, logPeriod time.Duration, errorHandler func(error)) (*collector, error) {
 	if api == nil {
 		return nil, errors.New("invalid parameter: api must not be nil")
 	}
@@ -98,7 +97,7 @@ func (c *collector) Collect(ch chan<- prometheus.Metric) {
 
 			responses := make(map[logEntry]float64)
 
-			if err := pullLogEntries(c.api, zoneID, start, end, func(entry logEntry) error {
+			if err := c.api.pullLogEntries(zoneID, start, end, func(entry logEntry) error {
 				responses[entry]++
 				return nil
 			}); err != nil {

@@ -39,22 +39,25 @@ func main() {
 		log.Fatal("A comma-separated list of zone names must be specified in CLOUDFLARE_ZONE_NAMES")
 	}
 
-	var api *cloudflare.API
+	var cfapi *cloudflare.API
+	var lpapi *logpullAPI
 	var err error
 
 	if apiToken != "" {
-		api, err = cloudflare.NewWithAPIToken(apiToken)
+		cfapi, err = cloudflare.NewWithAPIToken(apiToken)
+		lpapi = newLogpullAPIWithToken(apiToken)
 	} else {
-		api, err = cloudflare.New(apiKey, apiEmail)
+		cfapi, err = cloudflare.New(apiKey, apiEmail)
+		lpapi = newLogpullAPI(apiKey, apiEmail)
 	}
 
 	if err != nil {
-		log.Fatalf("creating api client: %s", err)
+		log.Fatalf("creating cfapi client: %s", err)
 	}
 
 	zoneIDs := make([]string, 0)
 	for _, zoneName := range strings.Split(zoneNames, ",") {
-		id, err := api.ZoneIDByName(strings.TrimSpace(zoneName))
+		id, err := cfapi.ZoneIDByName(strings.TrimSpace(zoneName))
 		if err != nil {
 			log.Fatalf("zone id lookup: %s", err)
 		}
@@ -65,9 +68,9 @@ func main() {
 		log.Printf("collector: %s", err)
 	}
 
-	collector, err := newCollector(api, zoneIDs, time.Minute, collectorErrorHandler)
+	collector, err := newCollector(lpapi, zoneIDs, time.Minute, collectorErrorHandler)
 	if err != nil {
-		log.Fatalf("creating collector: %w", err)
+		log.Fatalf("creating collector: %s", err)
 	}
 
 	prometheus.MustRegister(collector)
