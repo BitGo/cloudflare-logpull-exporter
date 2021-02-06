@@ -8,6 +8,7 @@ import (
 
 	"github.com/cloudflare/cloudflare-go"
 	"github.com/prometheus/client_golang/prometheus"
+	prommodel "github.com/prometheus/common/model"
 )
 
 // The Cloudflare API docs specify that 'start' must be no more than seven days
@@ -50,7 +51,7 @@ func newCollector(api *cloudflare.API, zoneIDs []string, logPeriod time.Duration
 			"origin_response_status",
 		},
 		prometheus.Labels{
-			"period": promDurationString(logPeriod),
+			"period": prommodel.Duration(logPeriod).String(),
 		},
 	)
 
@@ -119,26 +120,4 @@ func (c *collector) Collect(ch chan<- prometheus.Metric) {
 			c.errorCounter.Collect(ch)
 		}(zoneID)
 	}
-}
-
-// promDurationString turns a `time.Duration` into a string in Prometheus'
-// standard format.
-func promDurationString(d time.Duration) string {
-	s := ""
-	if int(d.Hours()) > 0 {
-		s += strconv.Itoa(int(d.Hours())) + "h"
-		d -= time.Duration(d.Hours()) * time.Hour
-	}
-	if int(d.Minutes()) > 0 {
-		s += strconv.Itoa(int(d.Minutes())) + "m"
-		d -= time.Duration(d.Minutes()) * time.Minute
-	}
-	if int(d.Seconds()) > 0 {
-		s += strconv.Itoa(int(d.Seconds())) + "s"
-		d -= time.Duration(d.Seconds()) * time.Second
-	}
-	if d.Milliseconds() > 0 {
-		s += strconv.Itoa(int(d.Milliseconds())) + "ms"
-	}
-	return s
 }
