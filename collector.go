@@ -1,6 +1,7 @@
 package main
 
 import (
+	"errors"
 	"strconv"
 	"sync"
 	"time"
@@ -44,8 +45,18 @@ type collector struct {
 	errorHandler func(error)
 }
 
-func newCollector(api *cloudflare.API, zoneIDs []string, errorHandler func(error)) *collector {
-	return &collector{api, zoneIDs, errorHandler}
+// newCollector creates a new Logpull collector. Returns an error if any
+// parameters are invalid.
+func newCollector(api *cloudflare.API, zoneIDs []string, errorHandler func(error)) (*collector, error) {
+	if api == nil {
+		return nil, errors.New("invalid parameter: api must not be nil")
+	}
+
+	if len(zoneIDs) == 0 {
+		return nil, errors.New("invalid parameter: zoneIDs must not be empty")
+	}
+
+	return &collector{api, zoneIDs, errorHandler}, nil
 }
 
 // Describe is a required method of the prometheus.Collector interface. It is
