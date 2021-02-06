@@ -78,9 +78,11 @@ func (c *logpullCollector) Collect(ch chan<- prometheus.Metric) {
 		wg.Add(1)
 
 		go func(zoneID string) {
-			logEntries := make(logEntryAggregator)
-			err := getLogEntries(c.api, zoneID, start, end, logEntries.Inc)
-			logEntries.Collect(ch)
+			responses := make(map[logEntry]float64)
+
+			err := getLogEntries(c.api, zoneID, start, end, func(entry logEntry) {
+				responses[entry]++
+			})
 
 			if err != nil {
 				if rerr, ok := err.(retryableAPIError); ok {
@@ -95,48 +97,23 @@ func (c *logpullCollector) Collect(ch chan<- prometheus.Metric) {
 				}
 			}
 
+			for entry, count := range responses {
+				ch <- prometheus.MustNewConstMetric(
+					httpResponseDesc,
+					prometheus.GaugeValue,
+					count,
+					entry.ClientRequestHost,
+					strconv.Itoa(entry.EdgeResponseStatus),
+					strconv.Itoa(entry.OriginResponseStatus),
+				)
+			}
+
 			wg.Done()
 
 		}(zoneID)
 	}
 
 	wg.Wait()
-}
-
-// logEntryAggregator is used to count the number of times a given LogEntry has
-// been seen. It implements the prometheus.Collector interface, but in order to
-// be used as such it must be 'driven' externally by calling 'Inc'.
-type logEntryAggregator map[logEntry]float64
-
-// Inc increments the number of times that a given LogEntry has been observed.
-func (m logEntryAggregator) Inc(entry logEntry) {
-	prev, _ := m[entry]
-	m[entry] = prev + 1
-}
-
-// Describe is a required method of the prometheus.Collector interface. It is
-// used to validate that there are no metric collisions when the collector is
-// registered. Although logEntryAggregator can be registered as a collector, it
-// may not be registered at the same time as a logpullCollector since both ship
-// the same metrics.
-func (m logEntryAggregator) Describe(ch chan<- *prometheus.Desc) {
-	ch <- httpResponseDesc
-}
-
-// Collect is a required method of the prometheus.Collector interface. When
-// registered, it is called by the Prometheus registry whenever a new set of
-// metrics are to be collected.
-func (m logEntryAggregator) Collect(ch chan<- prometheus.Metric) {
-	for entry, value := range m {
-		ch <- prometheus.MustNewConstMetric(
-			httpResponseDesc,
-			prometheus.GaugeValue,
-			value,
-			entry.ClientRequestHost,
-			strconv.Itoa(entry.EdgeResponseStatus),
-			strconv.Itoa(entry.OriginResponseStatus),
-		)
-	}
 }
 
 // promDurationString turns a `time.Duration` into a string in Prometheus'
