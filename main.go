@@ -68,7 +68,7 @@ func main() {
 		log.Printf("collector: %s", err)
 	}
 
-	prometheus.MustRegister(newLogpullCollector(api, zoneIDs, collectorErrorHandler))
+	prometheus.MustRegister(newCollector(api, zoneIDs, collectorErrorHandler))
 
 	http.Handle("/metrics", promhttp.Handler())
 	log.Printf("Listening on %s", addr)

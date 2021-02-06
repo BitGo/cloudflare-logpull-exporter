@@ -38,31 +38,27 @@ func init() {
 	prometheus.MustRegister(errorCounter)
 }
 
-// logpullCollector is an implementation of prometheus.Collector which reads
-// from Cloudflare's Logpull API and produces aggregated metrics.
-type logpullCollector struct {
+type collector struct {
 	api          *cloudflare.API
 	zoneIDs      []string
 	errorHandler func(error)
 }
 
-// newLogpullCollector creates a new logpullCollector based on the provided
-// *cloudflare.API and zoneIDs.
-func newLogpullCollector(api *cloudflare.API, zoneIDs []string, errorHandler func(error)) *logpullCollector {
-	return &logpullCollector{api, zoneIDs, errorHandler}
+func newCollector(api *cloudflare.API, zoneIDs []string, errorHandler func(error)) *collector {
+	return &collector{api, zoneIDs, errorHandler}
 }
 
 // Describe is a required method of the prometheus.Collector interface. It is
 // used to validate that there are no metric collisions when the collector is
 // registered.
-func (c *logpullCollector) Describe(ch chan<- *prometheus.Desc) {
+func (c *collector) Describe(ch chan<- *prometheus.Desc) {
 	ch <- httpResponseDesc
 }
 
 // Collect is a required method of the prometheus.Collector interface. It is
 // called by the Prometheus registry whenever a new set of metrics are to be
 // collected.
-func (c *logpullCollector) Collect(ch chan<- prometheus.Metric) {
+func (c *collector) Collect(ch chan<- prometheus.Metric) {
 	// The Logpull API docs say that we must go back at least one full minute.
 	end := time.Now().Add(-1 * time.Minute)
 	start := end.Add(-1 * logPeriod)
