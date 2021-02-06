@@ -88,11 +88,13 @@ func (c *collector) Collect(ch chan<- prometheus.Metric) {
 	start := end.Add(-1 * c.logPeriod)
 
 	var wg sync.WaitGroup
+	defer wg.Wait()
 
 	for _, zoneID := range c.zoneIDs {
 		wg.Add(1)
-
 		go func(zoneID string) {
+			defer wg.Done()
+
 			responses := make(map[logEntry]float64)
 
 			if err := pullLogEntries(c.api, zoneID, start, end, func(entry logEntry) error {
@@ -115,12 +117,8 @@ func (c *collector) Collect(ch chan<- prometheus.Metric) {
 			}
 
 			c.errorCounter.Collect(ch)
-
-			wg.Done()
 		}(zoneID)
 	}
-
-	wg.Wait()
 }
 
 // promDurationString turns a `time.Duration` into a string in Prometheus'
