@@ -5,6 +5,7 @@ import (
 	"net/http"
 	"os"
 	"strings"
+	"time"
 
 	"github.com/cloudflare/cloudflare-go"
 	"github.com/prometheus/client_golang/prometheus"
@@ -68,7 +69,7 @@ func main() {
 		log.Printf("collector: %s", err)
 	}
 
-	collector, err := newCollector(api, zoneIDs, collectorErrorHandler)
+	collector, err := newCollector(api, zoneIDs, time.Minute, collectorErrorHandler)
 	if err != nil {
 		log.Fatalf("creating collector: %w", err)
 	}
