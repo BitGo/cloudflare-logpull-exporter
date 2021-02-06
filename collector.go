@@ -17,22 +17,12 @@ import (
 // https://developers.cloudflare.com/logs/logpull-api/requesting-logs#parameters
 const logPeriodRange = 7*24*time.Hour - time.Minute
 
-var (
-	errorCounter = prometheus.NewCounter(prometheus.CounterOpts{
-		Name: "cloudflare_logs_errors_total",
-		Help: "The number of errors that have occurred while collecting metrics",
-	})
-)
-
-func init() {
-	prometheus.MustRegister(errorCounter)
-}
-
 type collector struct {
 	api          *cloudflare.API
 	zoneIDs      []string
 	logPeriod    time.Duration
 	responseDesc *prometheus.Desc
+	errorCounter prometheus.Counter
 	errorHandler func(error)
 }
 
@@ -64,11 +54,17 @@ func newCollector(api *cloudflare.API, zoneIDs []string, logPeriod time.Duration
 		},
 	)
 
+	errorCounter := prometheus.NewCounter(prometheus.CounterOpts{
+		Name: "cloudflare_logs_errors_total",
+		Help: "The number of errors that have occurred while collecting metrics",
+	})
+
 	return &collector{
 		api,
 		zoneIDs,
 		logPeriod,
 		responseDesc,
+		errorCounter,
 		errorHandler,
 	}, nil
 }
@@ -78,6 +74,7 @@ func newCollector(api *cloudflare.API, zoneIDs []string, logPeriod time.Duration
 // registered.
 func (c *collector) Describe(ch chan<- *prometheus.Desc) {
 	ch <- c.responseDesc
+	c.errorCounter.Describe(ch)
 }
 
 // Collect is a required method of the prometheus.Collector interface. It is
@@ -102,7 +99,7 @@ func (c *collector) Collect(ch chan<- prometheus.Metric) {
 				responses[entry]++
 				return nil
 			}); err != nil {
-				errorCounter.Inc()
+				c.errorCounter.Inc()
 				c.errorHandler(err)
 			}
 
@@ -117,8 +114,9 @@ func (c *collector) Collect(ch chan<- prometheus.Metric) {
 				)
 			}
 
-			wg.Done()
+			c.errorCounter.Collect(ch)
 
+			wg.Done()
 		}(zoneID)
 	}
 
