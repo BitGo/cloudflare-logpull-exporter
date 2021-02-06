@@ -48,7 +48,7 @@ func main() {
 	}
 
 	if err != nil {
-		log.Fatalf("Error creating API client: %s", err.Error())
+		log.Fatalf("creating api client: %s", err)
 	}
 
 	zones := make(map[string]string)
@@ -58,13 +58,17 @@ func main() {
 		name = strings.TrimSpace(name)
 		id, err := api.ZoneIDByName(name)
 		if err != nil {
-			log.Fatalf("Error looking up zone ID for zone %s: %s", name, err.Error())
+			log.Fatalf("zone id lookup: %s", err)
 		}
 		zones[name] = id
 		zoneIDs = append(zoneIDs, id)
 	}
 
-	prometheus.MustRegister(newLogpullCollector(api, zoneIDs))
+	collectorErrorHandler := func(err error) {
+		log.Printf("collector: %s", err)
+	}
+
+	prometheus.MustRegister(newLogpullCollector(api, zoneIDs, collectorErrorHandler))
 
 	http.Handle("/metrics", promhttp.Handler())
 	log.Printf("Listening on %s", addr)

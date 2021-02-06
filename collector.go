@@ -1,7 +1,6 @@
 package main
 
 import (
-	"log"
 	"strconv"
 	"sync"
 	"time"
@@ -29,30 +28,28 @@ var (
 		},
 	)
 
-	retryableAPIErrors = prometheus.NewCounterVec(
-		prometheus.CounterOpts{
-			Name: "cloudflare_logs_api_errors_total",
-			Help: "The total number of retryable Cloudflare API errors",
-		},
-		[]string{"operation", "kind"},
-	)
+	errorCounter = prometheus.NewCounter(prometheus.CounterOpts{
+		Name: "cloudflare_logs_errors_total",
+		Help: "The number of errors that have occurred while collecting metrics",
+	})
 )
 
 func init() {
-	prometheus.MustRegister(retryableAPIErrors)
+	prometheus.MustRegister(errorCounter)
 }
 
 // logpullCollector is an implementation of prometheus.Collector which reads
 // from Cloudflare's Logpull API and produces aggregated metrics.
 type logpullCollector struct {
-	api     *cloudflare.API
-	zoneIDs []string
+	api          *cloudflare.API
+	zoneIDs      []string
+	errorHandler func(error)
 }
 
 // newLogpullCollector creates a new logpullCollector based on the provided
 // *cloudflare.API and zoneIDs.
-func newLogpullCollector(api *cloudflare.API, zoneIDs []string) *logpullCollector {
-	return &logpullCollector{api, zoneIDs}
+func newLogpullCollector(api *cloudflare.API, zoneIDs []string, errorHandler func(error)) *logpullCollector {
+	return &logpullCollector{api, zoneIDs, errorHandler}
 }
 
 // Describe is a required method of the prometheus.Collector interface. It is
@@ -64,9 +61,7 @@ func (c *logpullCollector) Describe(ch chan<- *prometheus.Desc) {
 
 // Collect is a required method of the prometheus.Collector interface. It is
 // called by the Prometheus registry whenever a new set of metrics are to be
-// collected. If any retryable errors are encountered during this process, they
-// are logged and counted in the 'cloudflare_logs_api_errors_total' metric. If
-// a non-retryable error occurs here, we log it and exit non-zero.
+// collected.
 func (c *logpullCollector) Collect(ch chan<- prometheus.Metric) {
 	// The Logpull API docs say that we must go back at least one full minute.
 	end := time.Now().Add(-1 * time.Minute)
@@ -80,21 +75,12 @@ func (c *logpullCollector) Collect(ch chan<- prometheus.Metric) {
 		go func(zoneID string) {
 			responses := make(map[logEntry]float64)
 
-			err := getLogEntries(c.api, zoneID, start, end, func(entry logEntry) {
+			if err := getLogEntries(c.api, zoneID, start, end, func(entry logEntry) error {
 				responses[entry]++
-			})
-
-			if err != nil {
-				if rerr, ok := err.(retryableAPIError); ok {
-					labels := prometheus.Labels{
-						"operation": rerr.operation,
-						"kind":      rerr.kind,
-					}
-					retryableAPIErrors.With(labels).Inc()
-					log.Println(err)
-				} else {
-					log.Fatal(err)
-				}
+				return nil
+			}); err != nil {
+				errorCounter.Inc()
+				c.errorHandler(err)
 			}
 
 			for entry, count := range responses {

@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io/ioutil"
 	"net/http"
 	"strings"
 	"time"
@@ -24,10 +25,8 @@ type logEntry struct {
 // getLogEntries makes a request to Cloudflare's Logpull API, requesting log
 // entries for the given zoneID between the given start and end time. Each
 // entry is parsed into a logEntry struct and passed to the given handler
-// function. If any error occurs, it is returned to the caller. If the error
-// is presumably safe to retry (i.e., non-fatal), it will have the type
-// RetryableAPIError.
-func getLogEntries(api *cloudflare.API, zoneID string, start, end time.Time, fn func(logEntry)) error {
+// function.
+func getLogEntries(api *cloudflare.API, zoneID string, start, end time.Time, handler func(logEntry) error) error {
 	fields := []string{
 		"ClientRequestHost",
 		"EdgeResponseStatus",
@@ -41,7 +40,7 @@ func getLogEntries(api *cloudflare.API, zoneID string, start, end time.Time, fn 
 
 	req, err := http.NewRequest(http.MethodGet, url, nil)
 	if err != nil {
-		return fmt.Errorf("Error constructing logpull request: %s", err.Error())
+		return fmt.Errorf("creating api request: %w", err)
 	}
 
 	if api.APIToken != "" {
@@ -50,36 +49,26 @@ func getLogEntries(api *cloudflare.API, zoneID string, start, end time.Time, fn 
 		req.Header.Add("X-Auth-Email", api.APIEmail)
 		req.Header.Add("X-Auth-Key", api.APIKey)
 	} else {
-		return errors.New("Unsupported auth scheme")
+		return errors.New("creating api request: unusable auth parameters")
 	}
 
 	client := new(http.Client)
 	resp, err := client.Do(req)
 
-	operation := "getLogEntries"
-
 	if err != nil {
-		return retryableAPIError{
-			error:     err,
-			operation: operation,
-			kind:      errKindHTTPProto,
-		}
+		return fmt.Errorf("performing api request: %w", err)
 	}
 
 	defer resp.Body.Close()
 
 	if resp.StatusCode != http.StatusOK {
-		err = fmt.Errorf("Received unexpected HTTP status code: %d", resp.StatusCode)
-
-		if resp.StatusCode == http.StatusBadRequest {
-			err = fmt.Errorf("Logpull retention must be enabled: %w", err)
+		respBody, err := ioutil.ReadAll(resp.Body)
+		if err != nil {
+			err = fmt.Errorf("reading api response body: %w", err)
+		} else {
+			err = fmt.Errorf("unexpected api response: %s: %s", resp.Status, respBody)
 		}
-
-		return retryableAPIError{
-			error:     err,
-			operation: operation,
-			kind:      errKindHTTPStatus,
-		}
+		return err
 	}
 
 	scanner := bufio.NewScanner(resp.Body)
@@ -88,13 +77,11 @@ func getLogEntries(api *cloudflare.API, zoneID string, start, end time.Time, fn 
 	for scanner.Scan() {
 		var entry logEntry
 		if err := json.Unmarshal(scanner.Bytes(), &entry); err != nil {
-			return retryableAPIError{
-				error:     err,
-				operation: operation,
-				kind:      errKindJSONParse,
-			}
+			return fmt.Errorf("json: %w", err)
 		}
-		fn(entry)
+		if err := handler(entry); err != nil {
+			return fmt.Errorf("handler: %w", err)
+		}
 	}
 
 	return nil
