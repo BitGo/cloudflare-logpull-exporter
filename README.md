@@ -36,3 +36,19 @@ $ docker run -d -p 9299:9299 \
 [logpull-api]: https://developers.cloudflare.com/logs/logpull-api
 [docs-enabling-log-retention]: https://developers.cloudflare.com/logs/logpull-api/enabling-log-retention
 [terraform-cloudflare-logpull-retention]: https://registry.terraform.io/providers/cloudflare/cloudflare/latest/docs/resources/logpull_retention
+
+## License
+
+Copyright 2021 BitGo Inc.
+
+Licensed under the Apache License, Version 2.0 (the "License");
+you may not use this file except in compliance with the License.
+You may obtain a copy of the License at
+
+http://www.apache.org/licenses/LICENSE-2.0
+
+Unless required by applicable law or agreed to in writing, software
+distributed under the License is distributed on an "AS IS" BASIS,
+WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+See the License for the specific language governing permissions and
+limitations under the License.
