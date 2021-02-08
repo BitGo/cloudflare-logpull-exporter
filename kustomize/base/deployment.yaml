@@ -1,0 +1,22 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: cloudflare-logpull-exporter
+  labels:
+    app.kubernetes.io/name: cloudflare-logpull-exporter
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: cloudflare-logpull-exporter
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: cloudflare-logpull-exporter
+    spec:
+      containers:
+      - name: cloudflare-logpull-exporter
+        image: cloudflare-logpull-exporter
+        ports:
+        - name: metrics
+          containerPort: 9299
