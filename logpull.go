@@ -22,11 +22,14 @@ type logEntry struct {
 	OriginResponseStatus int    `json:"OriginResponseStatus"`
 }
 
+// logHandler is a function which is called by pullLogEntries for each parsed
+// log entry.
+type logHandler func(logEntry) error
+
 // pullLogEntries makes a request to Cloudflare's Logpull API, requesting log
 // entries for the given zoneID between the given start and end time. Each
-// entry is parsed into a logEntry struct and passed to the given handler
-// function.
-func pullLogEntries(api *cloudflare.API, zoneID string, start, end time.Time, handler func(logEntry) error) error {
+// entry is parsed into a logEntry struct and passed to the given logHandler.
+func pullLogEntries(api *cloudflare.API, zoneID string, start, end time.Time, handler logHandler) error {
 	// The API will only return the requested fields; thus, if we add or
 	// remove fields from the logEntry struct definition, we'll also want
 	// to make sure we update this list to ask the API for the same.
