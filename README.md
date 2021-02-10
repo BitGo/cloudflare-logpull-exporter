@@ -16,13 +16,24 @@ In order for the exporter to work, [log retention][docs-enabling-log-retention] 
 
 All configuration is done through the following environment variables:
 
-| Name                    | Required                                            |
-|-------------------------|-----------------------------------------------------|
-| `CLOUDFLARE_API_TOKEN`  | **Yes**, if `CLOUDFLARE_API_KEY` **is not** given   |
-| `CLOUDFLARE_API_EMAIL`  | **Yes**, if `CLOUDFLARE_API_KEY` **is** given       |
-| `CLOUDFLARE_API_KEY`    | **Yes**, if `CLOUDFLAER_API_TOKEN` **is not** given |
-| `CLOUDFLARE_ZONE_NAMES` | **Always**                                          |
-| `EXPORTER_LISTEN_ADDR`  | **No**, defaults to `:9299`                         |
+* `CLOUDFLARE_API_EMAIL`
+* `CLOUDFLARE_API_KEY`
+* `CLOUDFLARE_API_TOKEN`
+* `CLOUDFLARE_API_USER_SERVICE_KEY`
+* `CLOUDFLARE_ZONE_NAMES`
+* `EXPORTER_LISTEN_ADDR`
+
+There are three different ways to authenticate with Cloudflare's API. Exactly one of the following must be provided:
+
+* API key and email via `CLOUDFLARE_API_KEY` and `CLOUDFLARE_API_EMAIL`
+* API tokens via `CLOUDFLARE_API_TOKEN`
+* User service keys via `CLOUDFLARE_API_USER_SERVICE_KEY`
+
+`CLOUDFLARE_ZONE_NAMES` is a required parameter and should be a comma-separated list of zones from which to gather metrics.
+
+`EXPORTER_LISTEN_ADDR` is optional and allows binding the exporter to a different IP/port. The default value is `:9299`.
+
+### Example
 
 For example, assuming `$CLOUDFLARE_API_TOKEN` is set in your shell:
 

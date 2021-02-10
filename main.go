@@ -21,14 +21,18 @@ func main() {
 	apiEmail := os.Getenv("CLOUDFLARE_API_EMAIL")
 	apiKey := os.Getenv("CLOUDFLARE_API_KEY")
 	apiToken := os.Getenv("CLOUDFLARE_API_TOKEN")
+	apiUserServiceKey := os.Getenv("CLOUDFLARE_API_USER_SERVICE_KEY")
 	zoneNames := os.Getenv("CLOUDFLARE_ZONE_NAMES")
 
-	if apiToken == "" && apiKey == "" {
-		log.Fatal("Neither CLOUDFLARE_API_TOKEN nor CLOUDFLARE_API_KEY were specified. Use one or the other.")
+	numAuthSettings := 0
+	for _, v := range []string{apiToken, apiKey, apiUserServiceKey} {
+		if v != "" {
+			numAuthSettings++
+		}
 	}
 
-	if apiToken != "" && apiKey != "" {
-		log.Fatal("Both CLOUDFLARE_API_TOKEN and CLOUDFLARE_API_KEY specified. Use one or the other.")
+	if numAuthSettings != 1 {
+		log.Fatal("Must specify exactly one of CLOUDFLARE_API_TOKEN, CLOUDFLARE_API_KEY or CLOUDFLARE_API_USER_SERVICE_KEY.")
 	}
 
 	if apiKey != "" && apiEmail == "" {
@@ -46,9 +50,12 @@ func main() {
 	if apiToken != "" {
 		cfapi, err = cloudflare.NewWithAPIToken(apiToken)
 		lpapi = newLogpullAPIWithToken(apiToken)
-	} else {
+	} else if apiKey != "" {
 		cfapi, err = cloudflare.New(apiKey, apiEmail)
 		lpapi = newLogpullAPI(apiKey, apiEmail)
+	} else {
+		cfapi, err = cloudflare.NewWithUserServiceKey(apiUserServiceKey)
+		lpapi = newLogpullAPIWithUserServiceKey(apiUserServiceKey)
 	}
 
 	if err != nil {
