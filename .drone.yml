@@ -1,0 +1,13 @@
+kind: pipeline
+name: default
+
+steps:
+- name: lint
+  image: golangci/golangci-lint:v1.35.2
+  commands:
+  - golangci-lint run -E gofmt
+
+- name: test
+  image: golang:1.16.0
+  commands:
+  - go test

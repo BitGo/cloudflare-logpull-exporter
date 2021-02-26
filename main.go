@@ -5,6 +5,7 @@ import (
 	"net/http"
 	"os"
 	"strings"
+	"time"
 
 	"github.com/cloudflare/cloudflare-go"
 	"github.com/prometheus/client_golang/prometheus"
@@ -20,14 +21,18 @@ func main() {
 	apiEmail := os.Getenv("CLOUDFLARE_API_EMAIL")
 	apiKey := os.Getenv("CLOUDFLARE_API_KEY")
 	apiToken := os.Getenv("CLOUDFLARE_API_TOKEN")
+	apiUserServiceKey := os.Getenv("CLOUDFLARE_API_USER_SERVICE_KEY")
 	zoneNames := os.Getenv("CLOUDFLARE_ZONE_NAMES")
 
-	if apiToken == "" && apiKey == "" {
-		log.Fatal("Neither CLOUDFLARE_API_TOKEN nor CLOUDFLARE_API_KEY were specified. Use one or the other.")
+	numAuthSettings := 0
+	for _, v := range []string{apiToken, apiKey, apiUserServiceKey} {
+		if v != "" {
+			numAuthSettings++
+		}
 	}
 
-	if apiToken != "" && apiKey != "" {
-		log.Fatal("Both CLOUDFLARE_API_TOKEN and CLOUDFLARE_API_KEY specified. Use one or the other.")
+	if numAuthSettings != 1 {
+		log.Fatal("Must specify exactly one of CLOUDFLARE_API_TOKEN, CLOUDFLARE_API_KEY or CLOUDFLARE_API_USER_SERVICE_KEY.")
 	}
 
 	if apiKey != "" && apiEmail == "" {
@@ -38,34 +43,44 @@ func main() {
 		log.Fatal("A comma-separated list of zone names must be specified in CLOUDFLARE_ZONE_NAMES")
 	}
 
-	var api *cloudflare.API
+	var cfapi *cloudflare.API
+	var lpapi *logpullAPI
 	var err error
 
 	if apiToken != "" {
-		api, err = cloudflare.NewWithAPIToken(apiToken)
+		cfapi, err = cloudflare.NewWithAPIToken(apiToken)
+		lpapi = newLogpullAPIWithToken(apiToken)
+	} else if apiKey != "" {
+		cfapi, err = cloudflare.New(apiKey, apiEmail)
+		lpapi = newLogpullAPI(apiKey, apiEmail)
 	} else {
-		api, err = cloudflare.New(apiKey, apiEmail)
+		cfapi, err = cloudflare.NewWithUserServiceKey(apiUserServiceKey)
+		lpapi = newLogpullAPIWithUserServiceKey(apiUserServiceKey)
 	}
 
 	if err != nil {
-		log.Fatalf("Error creating API client: %s", err.Error())
+		log.Fatalf("creating cfapi client: %s", err)
 	}
 
-	zones := make(map[string]string)
 	zoneIDs := make([]string, 0)
-
-	for _, name := range strings.Split(zoneNames, ",") {
-		name = strings.TrimSpace(name)
-		id, err := api.ZoneIDByName(name)
+	for _, zoneName := range strings.Split(zoneNames, ",") {
+		id, err := cfapi.ZoneIDByName(strings.TrimSpace(zoneName))
 		if err != nil {
-			log.Fatalf("Error looking up zone ID for zone %s: %s", name, err.Error())
+			log.Fatalf("zone id lookup: %s", err)
 		}
-		zones[name] = id
 		zoneIDs = append(zoneIDs, id)
 	}
 
-	prometheus.MustRegister(NewLogpullCollector(api, zoneIDs))
+	collectorErrorHandler := func(err error) {
+		log.Printf("collector: %s", err)
+	}
 
+	collector, err := newCollector(lpapi, zoneIDs, time.Minute, collectorErrorHandler)
+	if err != nil {
+		log.Fatalf("creating collector: %s", err)
+	}
+
+	prometheus.MustRegister(collector)
 	http.Handle("/metrics", promhttp.Handler())
 	log.Printf("Listening on %s", addr)
 	log.Fatal(http.ListenAndServe(addr, nil))
